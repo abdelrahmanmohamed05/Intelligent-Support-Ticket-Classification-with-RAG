@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.schemas.ticket import PredictionRequest, PredictionResponse
@@ -16,6 +18,6 @@ async def predict(request: Request, payload: PredictionRequest) -> PredictionRes
         )
 
     try:
-        return run_inference(state, payload)
+        return await asyncio.to_thread(run_inference, state, payload)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc

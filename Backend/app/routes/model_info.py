@@ -17,8 +17,10 @@ async def model_info(request: Request) -> ModelInfoResponse:
         vectorizer_used=state.runtime.vectorizer.name,
         response_model_used=state.runtime.response_model.name,
         metrics={
+            "response_mode": state.runtime.response_mode,
             "classifier_metrics": state.runtime.classifier.metrics,
             "vectorizer_metrics": state.runtime.vectorizer.metrics,
             "response_metrics": state.runtime.response_model.metrics,
+            "rag_enabled": state.runtime.rag_runtime is not None,
         },
     )

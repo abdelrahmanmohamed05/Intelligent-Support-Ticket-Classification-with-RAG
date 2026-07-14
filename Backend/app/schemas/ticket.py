@@ -24,6 +24,18 @@ class HealthResponse(BaseModel):
     model_name: str | None = None
     vectorizer_name: str | None = None
     response_model_name: str | None = None
+    response_mode: str | None = None
+    qwen_ready: bool = False
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=2000)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    model_used: str
+    examples_used: int
 
 
 class ModelInfoResponse(BaseModel):

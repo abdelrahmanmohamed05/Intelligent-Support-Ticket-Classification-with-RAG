@@ -6,6 +6,8 @@ import numpy as np
 
 from app.schemas.ticket import PredictionRequest, PredictionResponse
 from app.services.model_loader import RuntimeModels
+from app.services.qwen_generator import build_rag_prompt, get_qwen_generator
+from app.services.rag_retriever import build_agent_solution, hybrid_retrieve
 from app.services.response_service import generate_response
 from app.services.vectorizer_service import vectorize_text
 from app.utils.text import preprocess_text
@@ -62,6 +64,38 @@ def _predict_category(classifier: Any, vectorized_text: Any, raw_text: str) -> t
     raise RuntimeError("Classification model does not expose a compatible predict API.")
 
 
+def _generate_qwen_response(
+    state: InferenceState,
+    normalized_text: str,
+    category: str,
+) -> tuple[str, str]:
+    if state.runtime.rag_runtime is None:
+        raise RuntimeError("Qwen response mode is enabled but RAG runtime is not loaded.")
+
+    retrieved_examples = hybrid_retrieve(state.runtime.rag_runtime, normalized_text)
+    agent_solution = build_agent_solution(category, retrieved_examples)
+    prompt = build_rag_prompt(normalized_text, category, retrieved_examples)
+    customer_reply = get_qwen_generator().generate(prompt)
+    logger.info("Qwen response generation complete | examples=%s", len(retrieved_examples))
+    return agent_solution, customer_reply
+
+
+def _generate_fallback_response(
+    state: InferenceState,
+    normalized_text: str,
+    category: str,
+    confidence: float,
+) -> tuple[str, str]:
+    logger.info("Falling back to traditional response generation")
+    return generate_response(
+        response_model=state.runtime.response_model.object,
+        response_corpus=state.runtime.response_corpus,
+        text=normalized_text,
+        category=category,
+        confidence=confidence,
+    )
+
+
 def run_inference(state: InferenceState, payload: PredictionRequest) -> PredictionResponse:
     combined_text = f"{payload.title.strip()} {payload.description.strip()}"
     normalized_text = preprocess_text(combined_text)
@@ -70,13 +104,35 @@ def run_inference(state: InferenceState, payload: PredictionRequest) -> Predicti
     category, confidence = _predict_category(state.runtime.classifier.object, vectorized, normalized_text)
     priority = _infer_priority(category, confidence)
 
-    solution, suggested_response = generate_response(
-        response_model=state.runtime.response_model.object,
-        response_corpus=state.runtime.response_corpus,
-        text=normalized_text,
-        category=category,
-        confidence=confidence,
-    )
+    if state.runtime.response_mode.strip().lower() == "qwen":
+        try:
+            solution, suggested_response = _generate_qwen_response(state, normalized_text, category)
+            model_used = f"{state.runtime.classifier.name} + Hybrid_RAG_Qwen_Generator"
+            vectorizer_used = (
+                f"Hybrid weights: FAISS [{state.runtime.rag_runtime.faiss_weight:.2f}] / "
+                f"BM25 [{state.runtime.rag_runtime.bm25_weight:.2f}]"
+                if state.runtime.rag_runtime
+                else state.runtime.vectorizer.name
+            )
+        except Exception as exc:
+            logger.exception("Qwen response generation failed, using fallback response model: %s", exc)
+            solution, suggested_response = _generate_fallback_response(
+                state=state,
+                normalized_text=normalized_text,
+                category=category,
+                confidence=confidence,
+            )
+            model_used = f"{state.runtime.classifier.name} + Fallback_Response_Model"
+            vectorizer_used = state.runtime.vectorizer.name
+    else:
+        solution, suggested_response = _generate_fallback_response(
+            state=state,
+            normalized_text=normalized_text,
+            category=category,
+            confidence=confidence,
+        )
+        model_used = state.runtime.classifier.name
+        vectorizer_used = state.runtime.vectorizer.name
 
     return PredictionResponse(
         category=category,
@@ -84,6 +140,6 @@ def run_inference(state: InferenceState, payload: PredictionRequest) -> Predicti
         confidence=round(confidence, 4),
         agent_solution=solution,
         customer_reply=suggested_response,
-        model_used=state.runtime.classifier.name,
-        vectorizer_used=state.runtime.vectorizer.name,
+        model_used=model_used,
+        vectorizer_used=vectorizer_used,
     )

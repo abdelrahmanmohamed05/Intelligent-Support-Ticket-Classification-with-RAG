@@ -13,6 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 from app.core.config import get_settings
+from app.services.rag_retriever import RagRuntime, load_rag_runtime
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class RuntimeModels:
     vectorizer: LoadedArtifact
     response_model: LoadedArtifact
     response_corpus: list[dict[str, str]]
+    rag_runtime: RagRuntime | None = None
+    response_mode: str = "traditional"
 
 
 def _tokens(value: str) -> set[str]:
@@ -298,15 +301,32 @@ def load_runtime_models() -> RuntimeModels:
     if response_model.object is None:
         response_model.path = corpus_path
 
+    rag_runtime = None
+    if settings.use_qwen_generation:
+        rag_runtime = load_rag_runtime(
+            artifacts_dir=settings.artifacts_dir,
+            embed_model_path=settings.embed_model_path,
+            top_k=settings.top_k,
+            faiss_weight=settings.faiss_weight,
+            bm25_weight=settings.bm25_weight,
+            candidate_pool=settings.rag_candidate_pool,
+            device=settings.resolved_embed_device,
+            faiss_use_mmap=settings.faiss_use_mmap,
+        )
+
     logger.info("Loaded classifier: %s (%s)", classifier.name, classifier.path)
     logger.info("Loaded vectorizer: %s (%s)", vectorizer.name, vectorizer.path)
     logger.info("Loaded response model: %s (%s)", response_model.name, response_model.path)
+    if rag_runtime is not None:
+        logger.info("Loaded RAG runtime for Qwen generation")
 
     return RuntimeModels(
         classifier=classifier,
         vectorizer=vectorizer,
         response_model=response_model,
         response_corpus=response_corpus,
+        rag_runtime=rag_runtime,
+        response_mode=settings.response_mode,
     )
 
 
