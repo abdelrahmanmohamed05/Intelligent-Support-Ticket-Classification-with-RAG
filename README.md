@@ -37,7 +37,7 @@ A full-stack intelligent support system that classifies customer tickets, assign
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  backend/artifacts/  (models — download separately)         │
+│  Backend/artifacts/  (models — download separately)         │
 │  · traditional_tfidf_logreg_classifier.joblib               │
 │  · tfidf_response_vectorizer.joblib                           │
 │  · tfidf_nearest_response_model.joblib                         │
@@ -50,7 +50,7 @@ A full-stack intelligent support system that classifies customer tickets, assign
 
 ```
 DEPI Project/
-├── backend/
+├── Backend/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── routes/          # health, predict, model-info
@@ -86,6 +86,105 @@ DEPI Project/
 
 ---
 
+## Run In VS Code
+
+These steps are the easiest way to run the project locally in **Visual Studio Code on Windows**.
+
+### 1. Open the project folder
+
+1. Open **VS Code**.
+2. Click **File -> Open Folder...**
+3. Select:
+
+```text
+d:\My Projects\DEPI Project
+```
+
+### 2. Open two terminals in VS Code
+
+In VS Code:
+
+1. Open **Terminal -> New Terminal**
+2. Keep the first terminal for the **backend**
+3. Open a second terminal for the **frontend**
+
+You can also split the terminal with the split terminal button in VS Code.
+
+### 3. Run the backend in terminal 1
+
+```powershell
+cd Backend
+py -m pip install -r requirements.txt
+py -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Backend URLs:
+
+| URL | Purpose |
+|-----|---------|
+| http://127.0.0.1:8000/health | Check backend status |
+| http://127.0.0.1:8000/model-info | Check loaded model info |
+| http://127.0.0.1:8000/docs | Open Swagger API docs |
+
+### 4. Run the frontend in terminal 2
+
+```powershell
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local` with:
+
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+```
+
+Then start the frontend:
+
+```powershell
+npm run dev
+```
+
+Frontend URLs:
+
+| URL | Purpose |
+|-----|---------|
+| http://127.0.0.1:3000 | Landing page |
+| http://127.0.0.1:3000/dashboard | Dashboard |
+
+### 5. Test inside the app
+
+1. Open `http://127.0.0.1:3000/dashboard`
+2. Enter a ticket title and description
+3. Click **Classify Ticket**
+4. Review:
+   - predicted category
+   - priority
+   - confidence
+   - resolution guide
+   - draft reply
+
+### 6. If VS Code cannot find npm
+
+If VS Code says `npm is not recognized`, restart VS Code after installing Node.js.
+
+If it still fails, run this in the frontend terminal before `npm install`:
+
+```powershell
+$env:Path += ";C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VisualStudio\NodeJs"
+```
+
+### 7. If prediction fails
+
+Check these in order:
+
+1. Backend terminal is still running on port `8000`
+2. `frontend/.env.local` contains `NEXT_PUBLIC_API_URL=http://127.0.0.1:8000`
+3. Artifacts exist inside `Backend/artifacts/`
+4. Refresh the browser after restarting either server
+
+---
+
 ## Step 1 — Clone the repository
 
 ```bash
@@ -106,7 +205,7 @@ Download the artifacts archive from Google Drive:
 Then:
 
 1. Extract the zip.
-2. Copy the contents into `backend/artifacts/`.
+2. Copy the contents into `Backend/artifacts/`.
 
 **Minimum files required to run the API:**
 
@@ -119,7 +218,7 @@ Then:
 Your folder should look like:
 
 ```
-backend/artifacts/
+Backend/artifacts/
 ├── traditional_tfidf_logreg_classifier.joblib
 ├── tfidf_response_vectorizer.joblib
 └── tfidf_nearest_response_model.joblib
@@ -132,33 +231,33 @@ backend/artifacts/
 Open a terminal:
 
 ```bash
-cd backend
+cd Backend
 pip install -r requirements.txt
 ```
 
 **Windows (recommended):**
 
+To run the backend on the correct port (8000) and avoid port conflicts with the frontend:
+
 ```powershell
-cd backend
+cd Backend
 py -m pip install -r requirements.txt
-py -m uvicorn app.main:app --reload
+py -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Optional — copy environment template:
+> [!TIP]
+> If you see `WinError 10013` (access permissions forbidden), it means a backend server is already running in the background. Stop it first using:
+> `Stop-Process -Name python, uvicorn -Force -ErrorAction SilentlyContinue`
 
-```bash
-cp .env.example .env
-```
-
-Default values work for local development. API runs at **http://localhost:8000**.
+Default values work for local development. API runs at **http://127.0.0.1:8000**.
 
 Verify:
 
 | URL | Description |
 |-----|-------------|
-| http://localhost:8000/health | Service + model status |
-| http://localhost:8000/model-info | Loaded models and metrics |
-| http://localhost:8000/docs | Swagger API documentation |
+| http://127.0.0.1:8000/health | Service + model status |
+| http://127.0.0.1:8000/model-info | Loaded models and metrics |
+| http://127.0.0.1:8000/docs | Swagger API documentation |
 
 ---
 
@@ -166,15 +265,27 @@ Verify:
 
 Open a **second** terminal:
 
-```bash
+```powershell
 cd frontend
+```
+
+**Windows Path Fix (If `npm` is not recognized):**
+If your terminal cannot find `npm`, run this inside your PowerShell terminal to temporarily append Node.js/npm's installation folder:
+
+```powershell
+$env:Path += ";C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Microsoft\VisualStudio\NodeJs"
+```
+
+Then install dependencies:
+
+```bash
 npm install
 ```
 
-Create `frontend/.env.local`:
+Create `frontend/.env.local` to point to the backend's IPv4 loopback (this avoids Windows IPv6 localhost connection failures):
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
 ```
 
 Start the dev server:
@@ -262,10 +373,46 @@ Returns selected classifier, vectorizer, response model paths and metrics.
 | Service | Config | Folder |
 |---------|--------|--------|
 | **Frontend** | Vercel | `frontend/` |
-| **Backend** | Render (Docker) | `backend/` |
+| **Backend** | Render (Docker) | `Backend/` |
 
-Set `NEXT_PUBLIC_API_URL` on Vercel to your deployed backend URL.  
-Set `CORS_ORIGINS` on the backend to your Vercel domain.
+### Vercel frontend
+
+1. Import the repository into Vercel.
+2. Set the **Root Directory** to `frontend`.
+3. Framework should detect as **Next.js** automatically.
+4. Add this environment variable:
+
+```env
+NEXT_PUBLIC_API_URL=https://YOUR-RENDER-BACKEND.onrender.com
+```
+
+5. Deploy the project.
+
+### Render backend
+
+This repository includes `render.yaml`, and the backend service must point to the case-sensitive `Backend/` folder.
+
+Before deploying on Render:
+
+1. Confirm your Render service uses the repo root `render.yaml`.
+2. Confirm the backend service root directory resolves to `Backend/`.
+3. Add `CORS_ORIGINS` with your Vercel domain, for example:
+
+```env
+CORS_ORIGINS=https://YOUR-FRONTEND.vercel.app
+```
+
+4. Make sure the required files inside `Backend/artifacts/` are available to the Render build/runtime environment.
+
+> [!IMPORTANT]
+> The current backend artifacts are very large locally. If those files are not available in the Render environment, the backend may start without a usable prediction pipeline.
+
+### Deployment order
+
+1. Deploy the backend to Render first.
+2. Copy the final Render backend URL.
+3. Set `NEXT_PUBLIC_API_URL` in Vercel.
+4. Deploy or redeploy the frontend in Vercel.
 
 ---
 
@@ -279,8 +426,8 @@ The Jupyter notebook `intelligent-support-ticket-classification-with-rag.ipynb` 
 
 | Issue | Fix |
 |-------|-----|
-| `app.main:app` not recognized (PowerShell) | Use `py -m uvicorn app.main:app --reload` from `backend/` |
-| Prediction failed | Confirm artifacts are in `backend/artifacts/` and restart backend |
+| `app.main:app` not recognized (PowerShell) | Use `py -m uvicorn app.main:app --reload` from `Backend/` |
+| Prediction failed | Confirm artifacts are in `Backend/artifacts/` and restart backend |
 | Frontend offline | Check `NEXT_PUBLIC_API_URL` and that backend is running on port 8000 |
 | Hydration warning | Hard refresh (`Ctrl + Shift + R`) after frontend restart |
 

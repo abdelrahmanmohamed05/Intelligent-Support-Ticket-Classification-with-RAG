@@ -3,6 +3,6 @@ services:
     name: ai-ticket-backend
     env: docker
     plan: free
-    rootDir: backend
+    rootDir: Backend
     dockerfilePath: ./Dockerfile
     autoDeploy: true
